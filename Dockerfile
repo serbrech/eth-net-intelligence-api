@@ -1,16 +1,26 @@
-## Dockerfile for eth-net-intelligence-api (build from git).
-##
 ## Build via:
 #
 # `docker build -t ethnetintel:latest .`
 #
-## Run via:
+# You can pass all the relevant parameter through environment configuration
+# They will be picked up by the application. 
+# Run via:
 #
-# `docker run -v <path to app.json>:/home/ethnetintel/eth-net-intelligence-api/app.json ethnetintel:latest`
+# `docker run \
+# -e WS_SERVER=netstatsfront:3000 \
+# -e WS_SECRET=20170420devchain \
+# -e RPC_HOST=geth \
+# -e RPC_PORT=8544 \
+# -e INSTANCE_NAME=${GETH_NODE}_node \
+# -e CONTACT_DETAILS= \
+# -e NODE_ENV=private \
+# -e LISTENING_PORT=30303 \
+# -e VERBOSITY=3 \
+#  ethnetintel:latest`
 #
-## Make sure, to mount your configured 'app.json' into the container at
-## '/home/ethnetintel/eth-net-intelligence-api/app.json', e.g.
-## '-v /path/to/app.json:/home/ethnetintel/eth-net-intelligence-api/app.json'
+# Alternatively, you can mount your configured 'app.json' into the container at
+## '/root/app/app.json', e.g.
+## '-v /path/to/app.json:/root/app/app.json'
 ## 
 ## Note: if you actually want to monitor a client, you'll need to make sure it can be reached from this container.
 ##       The best way in my opinion is to start this container with all client '-p' port settings and then 
@@ -19,7 +29,7 @@
 ##
 #
 # `docker run -d --name ethnetintel \
-# -v /home/user/app.json:/home/ethnetintel/eth-net-intelligence-api/app.json \
+# -v /home/user/app.json:/root/app/app.json \
 # -p 0.0.0.0:30303:30303 \
 # -p 0.0.0.0:30303:30303/udp \
 # ethnetintel:latest`
@@ -31,31 +41,23 @@
 #
 ## If you now want to deploy a new client version, just redo the second step.
 
+#-- stage 1
+FROM node
 
-FROM debian
+COPY ./package.json /home/ethnetintel/eth-net-intelligence-api/package.json
 
-RUN apt-get update &&\
-    apt-get install -y curl git-core &&\
-    curl -sL https://deb.nodesource.com/setup | bash - &&\
-    apt-get update &&\
-    apt-get install -y nodejs
+WORKDIR /home/ethnetintel/eth-net-intelligence-api
 
-RUN apt-get update &&\
-    apt-get install -y build-essential
+RUN npm set strict-ssl false &&\
+    npm install
 
-RUN adduser ethnetintel
+COPY . /home/ethnetintel/eth-net-intelligence-api
 
-RUN cd /home/ethnetintel &&\
-    git clone https://github.com/cubedro/eth-net-intelligence-api &&\
-    cd eth-net-intelligence-api &&\
-    npm install &&\
-    npm install -g pm2
+#--- stage 2 --
 
-RUN echo '#!/bin/bash\nset -e\n\ncd /home/ethnetintel/eth-net-intelligence-api\n/usr/bin/pm2 start ./app.json\ntail -f \
-    /home/ethnetintel/.pm2/logs/node-app-out-0.log' > /home/ethnetintel/startscript.sh
+FROM keymetrics/pm2:latest-alpine  
+WORKDIR /root/app
 
-RUN chmod +x /home/ethnetintel/startscript.sh &&\
-    chown -R ethnetintel. /home/ethnetintel
+COPY --from=0 /home/ethnetintel/eth-net-intelligence-api /root/app
+ENTRYPOINT ["pm2-docker", "start", "/root/app/app.json"]
 
-USER ethnetintel
-ENTRYPOINT ["/home/ethnetintel/startscript.sh"]

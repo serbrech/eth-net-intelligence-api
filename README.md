@@ -10,14 +10,6 @@ This is the backend service which runs along with ethereum and tracks the networ
 * node
 * npm
 
-
-## Installation on an Ubuntu EC2 Instance
-
-Fetch and run the build shell. This will install everything you need: latest ethereum - CLI from develop branch (you can choose between eth or geth), node.js, npm & pm2.
-
-```bash
-bash <(curl https://raw.githubusercontent.com/cubedro/eth-net-intelligence-api/master/bin/build.sh)
-```
 ## Installation as docker container (optional)
 
 There is a `Dockerfile` in the root directory of the repository. Please read through the header of said file for
@@ -25,7 +17,7 @@ instructions on how to build/run/setup. Configuration instructions below still a
 
 ## Configuration
 
-Configure the app modifying [processes.json](/eth-net-intelligence-api/blob/master/processes.json). Note that you have to modify the backup processes.json file located in `./bin/processes.json` (to allow you to set your env vars without being rewritten when updating).
+Configure the app modifying [app.json](/root/app/app.json). The following environment variables are accepted :
 
 ```json
 "env":
@@ -44,12 +36,47 @@ Configure the app modifying [processes.json](/eth-net-intelligence-api/blob/mast
 
 ## Run
 
-Run it using pm2:
+ You can pass all the relevant parameter through docker environment variable configuration
+ They will be picked up by the application:
 
-```bash
-cd ~/bin
-pm2 start processes.json
+```shellscript
+ docker run \
+ -e WS_SERVER=netstatsfront:3000 \
+ -e WS_SECRET=20170420devchain \
+ -e RPC_HOST=geth \
+ -e RPC_PORT=8544 \
+ -e INSTANCE_NAME=${GETH_NODE}_node \
+ -e CONTACT_DETAILS= \
+ -e NODE_ENV=private \
+ -e LISTENING_PORT=30303 \
+ -e VERBOSITY=3 \
+  ethnetintel:latest
 ```
+
+ Alternatively, you can mount your configured `app.json` shown in the above section into the container at
+ `/root/app/app.json`, e.g. `-v /path/to/app.json:/root/app/app.json`
+
+ > Note: if you actually want to monitor a client, you'll need to make sure it can be reached from this container.
+ > The best way in my opinion is to start this container with all client '-p' port settings and then 
+ > share its network with the client. This way you can redeploy the client at will and just leave 'ethnetintel' running. 
+
+ E.g. with the python client 'pyethapp':
+
+ ```shellscript
+ docker run -d --name ethnetintel \
+ -v /home/user/app.json:/root/app/app.json \
+ -p 0.0.0.0:30303:30303 \
+ -p 0.0.0.0:30303:30303/udp \
+ ethnetintel:latest
+
+ docker run -d --name pyethapp \
+ --net=container:ethnetintel \
+ -v /path/to/data:/data \
+ pyethapp:latest
+ ```
+
+ If you now want to deploy a new client version, just redo the second step.
+
 
 ## Updating
 
